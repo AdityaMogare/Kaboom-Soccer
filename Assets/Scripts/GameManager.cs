@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
+using UnityEngine.SceneManagement;   // for Replay
 
 public class GameManager : MonoBehaviour
 {
@@ -13,6 +14,10 @@ public class GameManager : MonoBehaviour
     public TextMeshProUGUI timerText;
     public TextMeshProUGUI blueScoreText;
     public TextMeshProUGUI redScoreText;
+
+    [Header("Game Over UI")]
+    public GameObject gameOverPanel;       // Canvas/ GameOverPanel
+    public TextMeshProUGUI winnerText;     // Canvas/ GameOverPanel/ WinnerText
 
     [Header("Game Timer")]
     public float matchTime = 120f;   // seconds (2:00)
@@ -48,7 +53,6 @@ public class GameManager : MonoBehaviour
     public bool IsLocked => goalLock;
     public bool IsMatchRunning => matchRunning;
 
-    // Optional event if controllers want to listen for end-of-match
     public System.Action OnMatchEnded;
 
     void Awake()
@@ -59,16 +63,18 @@ public class GameManager : MonoBehaviour
 
     void Start()
     {
-        // Reset UI and start the match
+        // init UI
         UpdateScoreUI();
         currentTime = Mathf.Max(0f, matchTime);
         UpdateTimerUI();
         matchRunning = true;
+
+        // ensure GameOver panel is hidden at start
+        if (gameOverPanel) gameOverPanel.SetActive(false);
     }
 
     void Update()
     {
-        // Countdown timer
         if (matchRunning)
         {
             currentTime -= Time.deltaTime;
@@ -86,49 +92,86 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // Called by GoalZone
+    // ---------- Goals ----------
     public void OnGoalScored(Team scoringTeam)
     {
-        if (!matchRunning) return;     // ignore goals after time is up
+        if (!matchRunning) return;
         if (goalLock) return;
-        goalLock = true;               // lock immediately
+        goalLock = true;
         StartCoroutine(HandleGoalRoutine(scoringTeam));
     }
 
     private IEnumerator HandleGoalRoutine(Team scoringTeam)
     {
-        // 1) Increment score once
         if (scoringTeam == Team.Blue) blueScore++;
         else                          redScore++;
         UpdateScoreUI();
         Debug.Log($"GOAL!  Blue {blueScore} : Red {redScore}   ({scoringTeam} scored)");
 
-        // 2) Disable both goals for the whole reset window
         if (leftGoalTrigger)  leftGoalTrigger.enabled  = false;
         if (rightGoalTrigger) rightGoalTrigger.enabled = false;
 
-        // 3) Freeze physics and teleport puck to center immediately
         if (puckRb)
         {
-            puckRb.linearVelocity = Vector2.zero;     // use velocity (works in all versions)
+            puckRb.linearVelocity = Vector2.zero;
             puckRb.angularVelocity = 0f;
             puckRb.simulated = false;
             if (puckSpawn) puckRb.transform.position = puckSpawn.position;
         }
 
-        // 4) Reset players (only active/alive disks) to their spawn markers
         ResetTeamToSpawns(Team.Blue);
         ResetTeamToSpawns(Team.Red);
 
-        // 5) Brief pause for "goal" moment
         yield return new WaitForSeconds(postGoalDelay);
 
-        // 6) Re-enable physics and goal triggers, unlock
         if (puckRb) puckRb.simulated = true;
         if (leftGoalTrigger)  leftGoalTrigger.enabled  = true;
         if (rightGoalTrigger) rightGoalTrigger.enabled = true;
 
         goalLock = false;
+    }
+
+    // ---------- End of Match ----------
+    private void EndMatch()
+    {
+        Debug.Log("MATCH OVER!");
+
+        // stop scoring
+        if (leftGoalTrigger)  leftGoalTrigger.enabled  = false;
+        if (rightGoalTrigger) rightGoalTrigger.enabled = false;
+
+        // freeze puck
+        if (puckRb)
+        {
+            puckRb.linearVelocity = Vector2.zero;
+            puckRb.angularVelocity = 0f;
+            puckRb.simulated = false;
+        }
+
+        // bring EVERY disk back (even eliminated ones)
+        ReactivateAllTeam(Team.Blue);
+        ReactivateAllTeam(Team.Red);
+        ResetTeamToSpawns(Team.Blue);
+        ResetTeamToSpawns(Team.Red);
+
+        // snap puck to center
+        if (puckRb && puckSpawn) puckRb.transform.position = puckSpawn.position;
+
+        // show panel with winner text
+        string result = (blueScore > redScore) ? "Blue Wins!"
+                       : (redScore > blueScore) ? "Red Wins!"
+                       : "Draw!";
+        if (winnerText) winnerText.text = result;
+        if (gameOverPanel) gameOverPanel.SetActive(true);
+
+        OnMatchEnded?.Invoke();
+    }
+
+    public void OnClickReplay()
+    {
+        // reload current scene
+        Scene active = SceneManager.GetActiveScene();
+        SceneManager.LoadScene(active.buildIndex);
     }
 
     // ---------- UI helpers ----------
@@ -146,26 +189,18 @@ public class GameManager : MonoBehaviour
         if (redScoreText)  redScoreText.text  = redScore.ToString();
     }
 
-    private void EndMatch()
+    // ---------- Respawn helpers ----------
+    private void ReactivateAllTeam(Team team)
     {
-        Debug.Log("MATCH OVER!");
-        // Disable goal triggers so no more scoring
-        if (leftGoalTrigger)  leftGoalTrigger.enabled  = false;
-        if (rightGoalTrigger) rightGoalTrigger.enabled = false;
-
-        // Optionally freeze puck & players
-        if (puckRb)
+        var disks = GetTeamDisks(team);
+        if (disks == null) return;
+        foreach (var rb in disks)
         {
-            puckRb.linearVelocity = Vector2.zero;
-            puckRb.angularVelocity = 0f;
-            puckRb.simulated = false;
+            if (rb == null) continue;
+            rb.gameObject.SetActive(true); // revive eliminated disks
         }
-
-        // Notify listeners (e.g., controllers can stop reading input)
-        OnMatchEnded?.Invoke();
     }
 
-    // ---------- Respawn helpers ----------
     private void ResetTeamToSpawns(Team team)
     {
         Transform[] spawns = (team == Team.Blue) ? blueSpawns : redSpawns;
@@ -178,7 +213,7 @@ public class GameManager : MonoBehaviour
             var rb = disks[i];
             var spawn = spawns[i];
             if (rb == null || spawn == null) continue;
-            if (!rb.gameObject.activeInHierarchy) continue; // skip eliminated disks
+            if (!rb.gameObject.activeInHierarchy) rb.gameObject.SetActive(true);
 
             rb.linearVelocity = Vector2.zero;
             rb.angularVelocity = 0f;
@@ -189,18 +224,15 @@ public class GameManager : MonoBehaviour
         {
             var rb = disks[i];
             if (rb == null) continue;
-            if (!rb.gameObject.activeInHierarchy) continue;
             rb.simulated = true;
         }
     }
 
     private Rigidbody2D[] GetTeamDisks(Team team)
     {
-        // Use Inspector-provided arrays if present
         if (team == Team.Blue && blueDisks != null && blueDisks.Length > 0) return blueDisks;
         if (team == Team.Red  && redDisks  != null && redDisks.Length  > 0) return redDisks;
 
-        // Otherwise auto-find by tag. Make sure your disks are tagged "BlueDisk" / "RedDisk".
         string tag = (team == Team.Blue) ? "BlueDisk" : "RedDisk";
         GameObject[] gos = GameObject.FindGameObjectsWithTag(tag);
         List<Rigidbody2D> list = new List<Rigidbody2D>(gos.Length);
@@ -209,7 +241,6 @@ public class GameManager : MonoBehaviour
             var rb = go.GetComponent<Rigidbody2D>();
             if (rb != null) list.Add(rb);
         }
-        // Sort by name so "Blue 1","Blue 2","Blue 3" map to B1,B2,B3 consistently
         list.Sort((a, b) => a.name.CompareTo(b.name));
         return list.ToArray();
     }
