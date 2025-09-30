@@ -55,6 +55,12 @@ public class GameManager : MonoBehaviour
 
     public System.Action OnMatchEnded;
 
+    // ---------- NEW: Mine placement setup ----------
+    [Header("Setup (Mines)")]
+    public MinePlacementController placement;   // drag in Inspector
+    public TextMeshProUGUI turnLabel;           // Canvas/TurnLabel
+    private readonly List<GameObject> allMines = new();
+
     void Awake()
     {
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
@@ -67,10 +73,13 @@ public class GameManager : MonoBehaviour
         UpdateScoreUI();
         currentTime = Mathf.Max(0f, matchTime);
         UpdateTimerUI();
-        matchRunning = true;
 
         // ensure GameOver panel is hidden at start
         if (gameOverPanel) gameOverPanel.SetActive(false);
+
+        // IMPORTANT: don't run the match timer yet; first do mine placement
+        matchRunning = false;
+        StartCoroutine(SetupMinesFlow());
     }
 
     void Update()
@@ -244,4 +253,51 @@ public class GameManager : MonoBehaviour
         list.Sort((a, b) => a.name.CompareTo(b.name));
         return list.ToArray();
     }
+
+    // ===================== NEW: Placement flow =====================
+    private IEnumerator SetupMinesFlow()
+    {
+        // --- reset before placement ---
+        // freeze + center puck
+        if (puckRb)
+        {
+            puckRb.linearVelocity = Vector2.zero;
+            puckRb.angularVelocity = 0f;
+            puckRb.simulated = false;
+            if (puckSpawn) puckRb.transform.position = puckSpawn.position;
+        }
+        // snap teams to spawns (revives any eliminated too)
+        ResetTeamToSpawns(Team.Blue);
+        ResetTeamToSpawns(Team.Red);
+        // --------------------------------
+
+        // 1) BLUE places on RIGHT half
+        if (turnLabel) turnLabel.text = "Blue: place your 2 mines (Left half)";
+        placement.BeginPlacement(PlacementTeam.Blue);
+        yield return new WaitUntil(() => placement.IsFinished());
+        allMines.AddRange(placement.GetPlacedMinesThisTeam());
+
+        // 2) RED places on LEFT half
+        if (turnLabel) turnLabel.text = "Red: place your 2 mines (Right half)";
+        placement.BeginPlacement(PlacementTeam.Red);
+        yield return new WaitUntil(() => placement.IsFinished());
+        allMines.AddRange(placement.GetPlacedMinesThisTeam());
+
+        // 3) Hide & arm
+        foreach (var m in allMines)
+        {
+            var sr = m.GetComponent<SpriteRenderer>();
+            if (sr) sr.enabled = false;
+            var mb = m.GetComponent<Mine_Blue>(); if (mb) mb.Arm();
+            var mr = m.GetComponent<Mine_Red>();  if (mr) mr.Arm();
+        }
+        if (turnLabel) turnLabel.text = "";
+
+        // unfreeze puck and start match
+        if (puckRb) puckRb.simulated = true;
+        currentTime = Mathf.Max(0f, matchTime);
+        UpdateTimerUI();
+        matchRunning = true;
+        Debug.Log("Mines placed by both teams — match started.");
+    }    
 }
