@@ -1,4 +1,4 @@
-// PuckController2D.cs
+
 using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody2D))]
@@ -19,14 +19,14 @@ public class PuckController2D : MonoBehaviour
 
     private void FixedUpdate()
     {
-        // Hard cap
+        
         if (rb.linearVelocity.magnitude > maxSpeed)
             rb.linearVelocity = rb.linearVelocity.normalized * maxSpeed;
 
-        // Keep it lively if it gets nearly stuck
+        
         if (rb.linearVelocity.magnitude < minKeepAliveSpeed)
         {
-            // Push along current heading if any, otherwise give a tiny random tap
+            
             Vector2 dir = rb.linearVelocity.sqrMagnitude > 0.01f
                 ? rb.linearVelocity.normalized
                 : Random.insideUnitCircle.normalized;
