@@ -3834,7 +3834,7 @@ MonoBehaviour:
       m_Calls: []
   m_text: "Rule1 \u2192 Objective: Score more goals than your opponent before the
     timer ends.\n\nRule2 \u2192 Twist: Each player plants 2 invisible mines before
-    kickoff.\nRule3 \u2192 Collision: If a disk hits an opponent\u2019s mine, it
+    kickoff.\nRule3 \u2192 Collision: If a player hits an opponent\u2019s mine, it
     is eliminated."
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 5302535af1044152a457ed104f1f4b91, type: 2}
@@ -6310,8 +6310,8 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1739916461}
   m_HandleRect: {fileID: 1739916460}
   m_Direction: 0
-  m_Value: -0.00000029724626
-  m_Size: 0.7440072
+  m_Value: -0.00000014862309
+  m_Size: 0.7440071
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -6964,7 +6964,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 1}
   m_AnchorMax: {x: 0.5, y: 1}
-  m_AnchoredPosition: {x: -457, y: -103}
+  m_AnchoredPosition: {x: -387, y: -131}
   m_SizeDelta: {x: 300, y: 80}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2107189990
