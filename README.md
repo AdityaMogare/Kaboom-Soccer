@@ -103,11 +103,7 @@ Kaboom Soccer builds on these tropes with its own **innovation: hidden mines**.
 - Extended mine system to allow **2 mines per player**.  
 - Tuned puck and disk physics (friction, drag, bounciness).  
 - Assisted with UI debugging and refinements.  
-
----
-
-## 🖼️ Diagram / Sketch  
-*(Add your concept sketch or arena design image here)*  
+ 
 
 ---
 
